@@ -5,22 +5,22 @@ from gen_maze import random_maze_generator
 
 vec = pg.math.Vector2
 
-N = 15
-M = 15
+N = 7
+M = 7
 P0 = (0, 0)
-P1 = (N-1, M-1)
+# P1 = (N-1, M-1)
+P1 = (4, 0)
 maze = random_maze_generator(N, M, P0, P1)
 
 # Configuration
 CONFIGURATION = np.array(maze)
-print(CONFIGURATION)
 
 # Main window
 TITLE = "maz3-solver"
 BLOCK_SIZE = 40
 PLAY_HEIGHT = CONFIGURATION.shape[0] * BLOCK_SIZE
 PLAY_WIDTH = CONFIGURATION.shape[1] * BLOCK_SIZE
-FPS = 30
+FPS = 40
 
 # Directories
 FILE_DIR = os.path.dirname(__file__)
@@ -37,8 +37,6 @@ PLAYER_COLOR = pg.Color("Red")
 TARGET_COLOR = pg.Color("Green")
 SEP_LINE_COLOR = (60, 60, 60)
 INFOS_COLOR = (255, 255, 255)
-
-# Target
 
 # Miscs
 INFOS_SIZE = 20

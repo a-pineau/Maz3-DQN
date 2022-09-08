@@ -17,16 +17,16 @@ os.environ["SDL_VIDEO_WINDOW_POS"] = "%d,%d" % (50, 50)
 STATE_SPACE = 2
 ACTION_SPACE = 4
 
-MAX_FRAME = 500
-
 REWARD_EXIT = 10
 
-PENALTY_WANDER = -1
-PENALTY_OCCUPIED = -2
-PENALTY_OUT = -5
-PENALTY_VISITED = -1
+PENALTY_WANDER = -0.5
+PENALTY_OCCUPIED = -0.75
+PENALTY_OUT = -0.8
+PENALTY_VISITED = -0.25
 
-MOVES = {0: "right", 1: "left"}
+THRESHOLD_REWARD = -3 * const.CONFIGURATION.size
+print("threshold reward=", THRESHOLD_REWARD)
+
 CELL_COLORS = {
     0: const.OCCUPIED_CELL_COLOR,
     1: const.FREE_CELL_COLOR,
@@ -53,15 +53,15 @@ class Game:
 
         self.state_space = STATE_SPACE
         self.action_space = ACTION_SPACE
+
         self.n_games = 0
-        self.n_frames_threshold = 0
+        self.reward_episode = 0
 
     ####### Methods #######
 
     def reset(self) -> np.array:
         """Resets the game and return its corresponding state."""
         self.score = 0
-        self.n_frames_threshold = 0
         self.reward_episode = 0
         self.position = (0, 0)
         self.maze = const.CONFIGURATION.copy()
@@ -76,10 +76,9 @@ class Game:
             action (int, required): action chosen by the human/agent to move the player
         """
         self.exit = self.visited = self.out = self.occupied = False
-        
-        i, j = self.position 
+        i, j = self.position
         old_position = i, j
-            
+
         if action == 0:
             j += 1
         elif action == 1:
@@ -90,82 +89,44 @@ class Game:
             i += 1
 
         # move out of bounds
-        if (
-            j * const.BLOCK_SIZE == const.PLAY_WIDTH
-            or j * const.BLOCK_SIZE < 0
-            or i * const.BLOCK_SIZE < 0
-            or i * const.BLOCK_SIZE == const.PLAY_HEIGHT
-        ):
+        if i == self.maze.shape[0] or j == self.maze.shape[1] or j < 0 or i < 0:
             self.out = True
         # move to free/visited cell
         elif self.maze[i, j] in (1, 2):
             if self.maze[i, j] == 2:
                 self.visited = True
-                    
+
             self.maze[old_position] = 2
             self.maze[i, j] = 3
-                
             self.position = i, j
         # trying to move to an occupied cell
         elif self.maze[i, j] == 0:
             self.occupied = True
         # move to exit (win)
         elif self.maze[i, j] == 4:
+            self.position = i, j
             self.exit = True
-        
-        # if self.human:
-        #     keys = pg.key.get_pressed()
-        #     i, j = self.position 
-        #     old_position = i, j
-            
-        #     if keys[pg.K_RIGHT]:
-        #         j += 1
-        #     elif keys[pg.K_LEFT]:
-        #         j -= 1
-        #     elif keys[pg.K_UP]:
-        #         i -= 1
-        #     elif keys[pg.K_DOWN]:
-        #         i += 1
-
-        #     # move out of bounds
-        #     if (
-        #         j * const.BLOCK_SIZE == const.PLAY_WIDTH
-        #         or j * const.BLOCK_SIZE < 0
-        #         or i * const.BLOCK_SIZE < 0
-        #         or i * const.BLOCK_SIZE == const.PLAY_HEIGHT
-        #     ):
-        #         self.out = True
-        #     # move to free/visited cell
-        #     elif self.maze[i, j] in (0, 2):
-        #         if self.maze[i, j] == 2:
-        #             self.visited = True
-                    
-        #         self.maze[old_position] = 2
-        #         self.maze[i, j] = 3
-                
-        #         self.position = i, j
-        #     # move to exit (win)
-        #     elif self.maze[i, j] == 4:
-        #         self.exit = True
 
     def step(self, action):
-        self.n_frames_threshold += 1
-
         self.events()
         self.move(action)
 
         reward, done = self.get_reward()
-        state = self.get_state()
+        self.reward_episode += reward
 
-        return state, reward, done
+        return self.get_state(), reward, done, False
 
     def get_state(self) -> np.array:
-        return np.array([self.position[0], self.position[1]], dtype=np.float32)
+        state = [
+            self.position[0],
+            self.position[1],
+        ]
+        return np.array(state, dtype=np.float32)
 
     def get_reward(self) -> tuple:
 
         # stops episode if the player does nothing but wonder around
-        if self.n_frames_threshold > MAX_FRAME:
+        if self.reward_episode < THRESHOLD_REWARD:
             return PENALTY_WANDER, True
         # player moves out of bounds
         elif self.out:

@@ -1,8 +1,5 @@
-# Python3 code to implement the approach
-
-
 from random import randint, seed
-seed(4)
+seed(7)
 
 # Class to define structure of a node
 class Node:

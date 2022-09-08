@@ -5,9 +5,9 @@ import torch.optim as optim
 import numpy as np
 
 
-class DeepQNework(nn.Module):
+class DeepQNetwork(nn.Module):
     def __init__(self, lr, input_dims, fc1_dims, fc2_dims, n_actions) -> None:
-        super(DeepQNework, self).__init__()
+        super(DeepQNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
@@ -44,6 +44,7 @@ class Agent:
         eps_end=0.01,
         eps_dec=1e-4,
     ) -> None:
+        
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
@@ -55,7 +56,7 @@ class Agent:
         self.action_space = [i for i in range(n_actions)]
         self.last_decision = None
 
-        self.Q_eval = DeepQNework(
+        self.Q_eval = DeepQNetwork(
             self.lr,
             n_actions=n_actions,
             input_dims=input_dims,
@@ -69,13 +70,13 @@ class Agent:
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool)
 
-    def store_transitions(self, state, action, reward, new_state, done):
+    def store_transitions(self, state, action, reward, new_state, terminal):
         index = self.mem_cntr % self.mem_size  # wrapping around
         self.state_memory[index] = state
         self.new_state_memory[index] = new_state
         self.reward_memory[index] = reward
         self.action_memory[index] = action
-        self.terminal_memory[index] = done
+        self.terminal_memory[index] = terminal
 
         self.mem_cntr += 1
 
