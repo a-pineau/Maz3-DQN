@@ -5,8 +5,8 @@ from gen_maze import random_maze_generator
 
 vec = pg.math.Vector2
 
-N = 7
-M = 7
+N = 9
+M = 9
 P0 = (0, 0)
 # P1 = (N-1, M-1)
 P1 = (4, 0)

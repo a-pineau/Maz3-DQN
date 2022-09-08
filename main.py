@@ -1,6 +1,5 @@
 from environment import Game
 from agent import Agent
-from utils_2020 import plotLearning
 
 import numpy as np
 
