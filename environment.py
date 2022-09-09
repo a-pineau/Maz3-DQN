@@ -14,18 +14,18 @@ n_snap = 0
 # Manually places the window
 os.environ["SDL_VIDEO_WINDOW_POS"] = "%d,%d" % (50, 50)
 
-STATE_SPACE = 2
+STATE_SPACE = 6
 ACTION_SPACE = 4
 
-REWARD_EXIT = 10
+REWARD_EXIT = 1.0
+REWARD_FREE = 0.5
 
-PENALTY_WANDER = -0.5
+PENALTY_WANDER = -1
 PENALTY_OCCUPIED = -0.75
 PENALTY_OUT = -0.8
 PENALTY_VISITED = -0.25
 
-THRESHOLD_REWARD = -3 * const.CONFIGURATION.size
-print("threshold reward=", THRESHOLD_REWARD)
+THRESHOLD_REWARD = -2 * const.CONFIGURATION.size
 
 CELL_COLORS = {
     0: const.OCCUPIED_CELL_COLOR,
@@ -42,7 +42,7 @@ class Game:
         self.human = human
         self.grid = grid
         self.infos = infos
-        self.screen = pg.display.set_mode([const.PLAY_WIDTH, const.PLAY_HEIGHT])
+        self.screen = pg.display.set_mode([const.TOTAL_WIDTH, const.TOTAL_HEIGHT])
         self.clock = pg.time.Clock()
         self.running = True
 
@@ -54,8 +54,9 @@ class Game:
         self.state_space = STATE_SPACE
         self.action_space = ACTION_SPACE
 
-        self.n_games = 0
+        self.n_episode = 0
         self.reward_episode = 0
+        self.rewards = [0]
 
     ####### Methods #######
 
@@ -116,11 +117,14 @@ class Game:
 
         return self.get_state(), reward, done, False
 
-    def get_state(self) -> np.array:
+    def get_state(self) -> np.ndarray:
+        """Returns the current state of the game."""
         state = [
             self.position[0],
             self.position[1],
         ]
+        state.extend(self.get_values_neighbours())
+
         return np.array(state, dtype=np.float32)
 
     def get_reward(self) -> tuple:
@@ -141,7 +145,21 @@ class Game:
             return REWARD_EXIT, True
 
         # player moves to a free cell
-        return 1, False
+        return REWARD_FREE, False
+
+    def get_values_neighbours(self):
+        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        values_neighbours = []
+
+        for offset in offsets:
+            i, j = self.position[0], self.position[1]
+            i, j = i + offset[0], j + offset[1]
+            if 0 <= i < self.maze.shape[0] and 0 <= j < self.maze.shape[1]:
+                values_neighbours.append(self.maze[i, j])
+            else:
+                values_neighbours.append(-1) # out of bounds
+
+        return values_neighbours
 
     def events(self):
         for event in pg.event.get():
@@ -152,7 +170,7 @@ class Game:
             ):
                 self.running = False
 
-    def render(self):
+    def render(self, agent):
         """TODO"""
 
         self.screen.fill(const.BACKGROUND_COLOR)
@@ -161,15 +179,17 @@ class Game:
             for j in range(self.maze.shape[1]):
                 value = self.maze[i, j]
                 color = CELL_COLORS[value]
-                x, y = j * const.BLOCK_SIZE, i * const.BLOCK_SIZE
+                x, y = const.INFOS_WIDTH + j * const.BLOCK_SIZE, i * const.BLOCK_SIZE
                 w, h = const.BLOCK_SIZE, const.BLOCK_SIZE
 
                 pg.draw.rect(self.screen, color, (x, y, w, h))
 
-        self.draw_grid()
-
+        if self.grid:
+            self.draw_grid()
         if self.infos:
-            self.draw_infos()
+            self.draw_infos(agent)
+
+        self.draw_progress_bar()
 
         pg.display.flip()
         self.clock.tick(const.FPS)
@@ -186,46 +206,37 @@ class Game:
         """TODO"""
         for i in range(1, const.PLAY_WIDTH // const.BLOCK_SIZE):
             # vertical lines
-            p_v1 = const.BLOCK_SIZE * i, 0
-            p_v2 = const.BLOCK_SIZE * i, const.PLAY_HEIGHT
+            p_v1 = const.INFOS_WIDTH + const.BLOCK_SIZE * i, 0
+            p_v2 = const.INFOS_WIDTH + const.BLOCK_SIZE * i, const.PLAY_HEIGHT
 
             # horizontal lines
-            p_h1 = 0, const.BLOCK_SIZE * i
-            p_h2 = const.PLAY_WIDTH, const.BLOCK_SIZE * i
+            p_h1 = const.INFOS_WIDTH, const.BLOCK_SIZE * i
+            p_h2 = const.TOTAL_WIDTH, const.BLOCK_SIZE * i
 
             pg.draw.line(self.screen, const.GRID_COLOR, p_v1, p_v2)
             pg.draw.line(self.screen, const.GRID_COLOR, p_h1, p_h2)
 
-    def draw_infos(self):
+    def draw_infos(self, agent):
         """Draws game informations"""
 
-        if self.score > self.highest_score:
-            self.highest_score = self.score
-
         perc_exploration = (
-            self.agent.n_exploration
-            / (self.agent.n_exploration + self.agent.n_exploitation)
-            * 100
+            agent.n_exploration / (agent.n_exploration + agent.n_exploitation) * 100
         )
         perc_exploitation = (
-            self.agent.n_exploitation
-            / (self.agent.n_exploration + self.agent.n_exploitation)
-            * 100
+            agent.n_exploitation / (agent.n_exploration + agent.n_exploitation) * 100
         )
-        perc_threshold = int((self.n_frames_threshold / MAX_FRAME) * 100)
+        perc_threshold = int((self.reward_episode / THRESHOLD_REWARD) * 100)
 
         infos = [
-            f"Game: {self.n_games}",
-            f"Reward game: {round(self.reward_episode, 1)}",
-            f"Mean reward: {round(self.mean_rewards[-1], 1)}",
-            f"Score: {self.score}",
-            f"Highest score: {self.highest_score}",
-            f"Mean score: {round(self.mean_scores[-1], 1)}",
-            f"Initial Epsilon: {self.agent.max_epsilon}",
-            f"Epsilon: {round(self.agent.epsilon, 4)}",
+            f"Episode: {self.n_episode}",
+            f"Episode reward: {round(self.reward_episode, 1)}",
+            f"Mean reward: {round(np.mean(self.rewards), 1)}",
+            f"Initial Epsilon: {agent.max_epsilon}",
+            f"Epsilon: {round(agent.epsilon, 4)}",
+            f"Epsilon decay: {agent.epsilon_decay}",
             f"Exploration: {round(perc_exploration, 3)}%",
             f"Exploitation: {round(perc_exploitation, 3)}%",
-            f"Last decision: {self.agent.last_decision}",
+            f"Last decision: {agent.last_decision}",
             f"Threshold: {perc_threshold}%",
             f"Time: {int(pg.time.get_ticks() / 1e3)}s",
             f"FPS: {int(self.clock.get_fps())}",
@@ -241,12 +252,24 @@ class Game:
                 (5, 5 + i * const.Y_OFFSET_INFOS),
             )
 
-        # sep line
+    def draw_progress_bar(self):
+        x_bg, y_bg = const.INFOS_WIDTH - const.PROGRESS_BAR_WIDTH, 0
+        w_bg, h_bg = const.PROGRESS_BAR_WIDTH, const.TOTAL_HEIGHT
+        x_fg, y_fg = x_bg, y_bg
+        w_fg, h_fg = w_bg, (self.reward_episode / THRESHOLD_REWARD) * h_bg
+
+        pg.draw.rect(
+            self.screen, const.PROGRESS_BAR_BACKGROUND, (x_bg, y_bg, w_bg, h_bg)
+        )
+        pg.draw.rect(
+            self.screen, const.PROGRESS_BAR_FOREGROUND, (x_fg, y_fg, w_fg, h_fg)
+        )
+        pg.draw.line(self.screen, pg.Color("Black"), (x_bg, y_bg), (x_bg, h_bg))
         pg.draw.line(
             self.screen,
-            const.SEP_LINE_COLOR,
-            (const.INFO_WIDTH, 0),
-            (const.INFO_WIDTH, const.INFO_HEIGHT),
+            pg.Color("Black"),
+            (x_bg + const.PROGRESS_BAR_WIDTH, y_bg),
+            (x_bg + const.PROGRESS_BAR_WIDTH, h_bg),
         )
 
 

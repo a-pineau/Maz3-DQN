@@ -40,21 +40,27 @@ class Agent:
         input_dims,
         batch_size,
         n_actions,
+        min_epsilon=0.01,
+        epsilon_decay=1e-4,
         max_mem_size=100_000,
-        eps_end=0.01,
-        eps_dec=1e-4,
     ) -> None:
         
         self.gamma = gamma
         self.epsilon = epsilon
+        self.max_epsilon = epsilon
+        self.min_epsilon = min_epsilon
+        self.epsilon_decay = epsilon_decay
         self.lr = lr
         self.batch_size = batch_size
         self.mem_cntr = 0
         self.mem_size = max_mem_size
-        self.eps_min = eps_end
-        self.eps_dec = eps_dec
+        self.epsilon_decay = epsilon_decay
         self.action_space = [i for i in range(n_actions)]
+        
+        self.current_decision = None
         self.last_decision = None
+        self.n_exploration = 0
+        self.n_exploitation = 0
 
         self.Q_eval = DeepQNetwork(
             self.lr,
@@ -72,6 +78,7 @@ class Agent:
 
     def store_transitions(self, state, action, reward, new_state, terminal):
         index = self.mem_cntr % self.mem_size  # wrapping around
+        
         self.state_memory[index] = state
         self.new_state_memory[index] = new_state
         self.reward_memory[index] = reward
@@ -82,12 +89,14 @@ class Agent:
 
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            self.last_decision = "Exploitation"
+            self.n_exploitation += 1
+            self.current_decision = "exploitation"
             state = T.tensor([observation]).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
             action = T.argmax(actions).item()
         else:
-            self.last_decision = "Exploration"
+            self.n_exploration += 1
+            self.current_decision = "exploration"
             action = np.random.choice(self.action_space)
 
         return action
@@ -120,7 +129,7 @@ class Agent:
         loss.backward()
         self.Q_eval.optimizer.step()
 
-        if self.epsilon > self.eps_min:
-            self.epsilon = self.epsilon - self.eps_dec
+        if self.epsilon > self.min_epsilon:
+            self.epsilon = self.epsilon - self.epsilon_decay
         else:
-            self.epsilon = self.eps_min
+            self.epsilon = self.min_epsilon

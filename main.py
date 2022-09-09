@@ -1,21 +1,17 @@
 from environment import Game
 from agent import Agent
 
-import numpy as np
-
 if __name__ == "__main__":
-    env = Game(human=False, grid=True, infos=False)
+    env = Game(human=True, grid=True, infos=True)
     agent = Agent(
-        gamma=0.99,
+        gamma=0.9,
         epsilon=1.0,
         batch_size=64,
         n_actions=env.action_space,
-        eps_end=0.01,
+        min_epsilon=0.01,
         input_dims=[env.state_space],
-        lr=0.003,
+        lr=0.001,
     )
-    scores, eps_history = [], []
-    episode = 0
 
     while env.running:
         score = 0
@@ -25,25 +21,17 @@ if __name__ == "__main__":
         while not done:
             if not env.running:
                 break
-            
-            env.render()
+                        
             action = agent.choose_action(state)
             new_state, reward, done, info = env.step(action)
-            score += reward
             agent.store_transitions(state, action, reward, new_state, done)
             agent.learn()
             state = new_state
-            
-        scores.append(score)
-        eps_history.append(agent.epsilon)
-        avg_score = np.mean(scores[-100:])
+            env.render(agent)
 
-        print(
-            "episode ",
-            episode,
-            "score %.2f" % score,
-            "average score %.2f" % avg_score,
-            "epsilon %.2f" % agent.epsilon,
-        )
+        agent.last_decision = agent.current_decision
+        agent.n_exploration = 0
+        agent.n_exploitation = 0
         
-        episode += 1
+        env.rewards.append(env.reward_episode)
+        env.n_episode += 1
