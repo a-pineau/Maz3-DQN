@@ -1,8 +1,10 @@
+import pygame as pg
+
 from environment import Game
 from agent import Agent
 
 if __name__ == "__main__":
-    env = Game(human=True, grid=True, infos=True)
+    env = Game(human=True, grid=True, infos=True, progress_bars=True)
     agent = Agent(
         gamma=0.9,
         epsilon=1.0,
@@ -35,3 +37,5 @@ if __name__ == "__main__":
         
         env.rewards.append(env.reward_episode)
         env.n_episode += 1
+    
+    pg.quit()

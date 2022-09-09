@@ -172,13 +172,13 @@ def random_maze_generator(r, c, P0, Pf):
         if pf_flag:
             S.insert(Pf)
 
-    # Mark the initial position
+    # Marks the initial position
     x0, y0 = P0
     xf, yf = Pf
-    maze[x0][y0] = 3
+    maze[x0][y0] = 1
     maze[xf][yf] = 4
 
-    # Return maze formed by the traversed path
+    # Returns maze formed by the traversed path
     return maze
 
 

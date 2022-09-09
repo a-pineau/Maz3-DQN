@@ -6,7 +6,7 @@ import numpy as np
 import pygame as pg
 import constants as const
 
-from utils import message, distance
+from utils import message, progress_bar
 
 vec = pg.math.Vector2
 n_snap = 0
@@ -14,7 +14,7 @@ n_snap = 0
 # Manually places the window
 os.environ["SDL_VIDEO_WINDOW_POS"] = "%d,%d" % (50, 50)
 
-STATE_SPACE = 6
+STATE_SPACE = 2
 ACTION_SPACE = 4
 
 REWARD_EXIT = 1.0
@@ -23,7 +23,7 @@ REWARD_FREE = 0.5
 PENALTY_WANDER = -1
 PENALTY_OCCUPIED = -0.75
 PENALTY_OUT = -0.8
-PENALTY_VISITED = -0.25
+PENALTY_VISITED = -0.5
 
 THRESHOLD_REWARD = -2 * const.CONFIGURATION.size
 
@@ -37,37 +37,46 @@ CELL_COLORS = {
 
 
 class Game:
-    def __init__(self, human=False, grid=False, infos=True) -> None:
+    def __init__(self, human=False, grid=False, infos=True, progress_bars=True) -> None:
         pg.init()
         self.human = human
         self.grid = grid
         self.infos = infos
+        self.progress_bars = progress_bars
         self.screen = pg.display.set_mode([const.TOTAL_WIDTH, const.TOTAL_HEIGHT])
         self.clock = pg.time.Clock()
         self.running = True
 
         pg.display.set_caption(const.TITLE)
 
-        self.maze = const.CONFIGURATION.copy()
-        self.position = (0, 0)
-
         self.state_space = STATE_SPACE
         self.action_space = ACTION_SPACE
 
+        self.score = 0
         self.n_episode = 0
-        self.reward_episode = 0
         self.rewards = [0]
 
     ####### Methods #######
 
     def reset(self) -> np.array:
         """Resets the game and return its corresponding state."""
-        self.score = 0
         self.reward_episode = 0
-        self.position = (0, 0)
         self.maze = const.CONFIGURATION.copy()
+        self.place_player()
 
         return self.get_state()
+
+    def place_player(self) -> None:
+        while True:
+            i = np.random.randint(self.maze.shape[0])
+            j = np.random.randint(self.maze.shape[1])
+
+            if self.maze[i, j] != 1:
+                continue
+
+            self.maze[i, j] = 3
+            self.position = (i, j)
+            break
 
     def move(self, action) -> None:
         """
@@ -118,12 +127,11 @@ class Game:
         return self.get_state(), reward, done, False
 
     def get_state(self) -> np.ndarray:
-        """Returns the current state of the game."""
+        """Returns the current state of the game, i.e. player's current position."""
         state = [
             self.position[0],
             self.position[1],
         ]
-        state.extend(self.get_values_neighbours())
 
         return np.array(state, dtype=np.float32)
 
@@ -142,6 +150,7 @@ class Game:
             return PENALTY_OCCUPIED, False
         # player finds the exit
         elif self.exit:
+            self.score += 1
             return REWARD_EXIT, True
 
         # player moves to a free cell
@@ -157,7 +166,7 @@ class Game:
             if 0 <= i < self.maze.shape[0] and 0 <= j < self.maze.shape[1]:
                 values_neighbours.append(self.maze[i, j])
             else:
-                values_neighbours.append(-1) # out of bounds
+                values_neighbours.append(-1)  # out of bounds
 
         return values_neighbours
 
@@ -169,11 +178,23 @@ class Game:
                 and event.key == pg.K_q
             ):
                 self.running = False
+                
+    def get_data_ratios(self, agent):
+        r_exploration = (
+            agent.n_exploration / (agent.n_exploration + agent.n_exploitation)
+        )
+        r_exploitation = (
+            agent.n_exploitation / (agent.n_exploration + agent.n_exploitation)
+        )
+        r_threshold = self.reward_episode / THRESHOLD_REWARD
+        
+        return r_exploration, r_exploitation, r_threshold
 
     def render(self, agent):
         """TODO"""
 
         self.screen.fill(const.BACKGROUND_COLOR)
+        data_ratios = self.get_data_ratios(agent)
 
         for i in range(self.maze.shape[0]):
             for j in range(self.maze.shape[1]):
@@ -187,9 +208,9 @@ class Game:
         if self.grid:
             self.draw_grid()
         if self.infos:
-            self.draw_infos(agent)
-
-        self.draw_progress_bar()
+            self.draw_infos(agent, *data_ratios)
+        if self.progress_bars:
+            self.draw_progress_bars(*data_ratios)
 
         pg.display.flip()
         self.clock.tick(const.FPS)
@@ -216,28 +237,21 @@ class Game:
             pg.draw.line(self.screen, const.GRID_COLOR, p_v1, p_v2)
             pg.draw.line(self.screen, const.GRID_COLOR, p_h1, p_h2)
 
-    def draw_infos(self, agent):
+    def draw_infos(self, agent, r_exploration, r_exploitation, r_threshold):
         """Draws game informations"""
 
-        perc_exploration = (
-            agent.n_exploration / (agent.n_exploration + agent.n_exploitation) * 100
-        )
-        perc_exploitation = (
-            agent.n_exploitation / (agent.n_exploration + agent.n_exploitation) * 100
-        )
-        perc_threshold = int((self.reward_episode / THRESHOLD_REWARD) * 100)
-
         infos = [
+            f"Score: {self.score}",
             f"Episode: {self.n_episode}",
             f"Episode reward: {round(self.reward_episode, 1)}",
             f"Mean reward: {round(np.mean(self.rewards), 1)}",
             f"Initial Epsilon: {agent.max_epsilon}",
             f"Epsilon: {round(agent.epsilon, 4)}",
             f"Epsilon decay: {agent.epsilon_decay}",
-            f"Exploration: {round(perc_exploration, 3)}%",
-            f"Exploitation: {round(perc_exploitation, 3)}%",
+            f"Exploration: {round(r_exploration * 100, 3)}%",
+            f"Exploitation: {round(r_exploitation * 100, 3)}%",
             f"Last decision: {agent.last_decision}",
-            f"Threshold: {perc_threshold}%",
+            f"Reward threshold: {int(r_threshold * 100)}%",
             f"Time: {int(pg.time.get_ticks() / 1e3)}s",
             f"FPS: {int(self.clock.get_fps())}",
         ]
@@ -245,31 +259,59 @@ class Game:
         # Drawing infos
         for i, info in enumerate(infos):
             message(
-                self.screen,
-                info,
-                const.INFOS_SIZE,
-                const.INFOS_COLOR,
+                self.screen, info, 
+                const.INFOS_SIZE, const.INFOS_COLOR, 
                 (5, 5 + i * const.Y_OFFSET_INFOS),
             )
 
-    def draw_progress_bar(self):
-        x_bg, y_bg = const.INFOS_WIDTH - const.PROGRESS_BAR_WIDTH, 0
-        w_bg, h_bg = const.PROGRESS_BAR_WIDTH, const.TOTAL_HEIGHT
-        x_fg, y_fg = x_bg, y_bg
-        w_fg, h_fg = w_bg, (self.reward_episode / THRESHOLD_REWARD) * h_bg
+    def draw_progress_bars(self, r_exploration, r_exploitation, r_threshold):
+        x_thresh, y = const.INFOS_WIDTH - const.PROGRESS_BAR_WIDTH - 6, 0
+        x_explo, y = const.INFOS_WIDTH - 2 * const.PROGRESS_BAR_WIDTH - 11, 0
+        x_exploit, y = const.INFOS_WIDTH - 3 * const.PROGRESS_BAR_WIDTH - 16, 0
 
-        pg.draw.rect(
-            self.screen, const.PROGRESS_BAR_BACKGROUND, (x_bg, y_bg, w_bg, h_bg)
+        w_bg, h_bg = const.PROGRESS_BAR_WIDTH, const.TOTAL_HEIGHT
+
+        w_fg, h_fg_thresh = w_bg, r_threshold * h_bg
+        w_fg, h_fg_explo = w_bg, r_exploration * h_bg
+        w_fg, h_fg_exploit = w_bg, r_exploitation * h_bg
+
+        # reward threshold
+        progress_bar(
+            self.screen, x_thresh, y, w_bg, h_bg, w_fg, h_fg_thresh,
+            const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_THRESH_FOREGROUND,
         )
-        pg.draw.rect(
-            self.screen, const.PROGRESS_BAR_FOREGROUND, (x_fg, y_fg, w_fg, h_fg)
+        message(
+            self.screen, "Reward threshold", 
+            const.INFOS_SIZE,
+            const.PROGRESS_BAR_THRESH_FOREGROUND,
+            (x_thresh + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),
+             anchor="center", rotation=90
         )
-        pg.draw.line(self.screen, pg.Color("Black"), (x_bg, y_bg), (x_bg, h_bg))
-        pg.draw.line(
-            self.screen,
-            pg.Color("Black"),
-            (x_bg + const.PROGRESS_BAR_WIDTH, y_bg),
-            (x_bg + const.PROGRESS_BAR_WIDTH, h_bg),
+        
+        # exploration
+        progress_bar(
+            self.screen, x_explo, y, w_bg, h_bg, w_fg, h_fg_explo,
+            const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_EXPLO_FOREGROUND,
+        )
+        message(
+            self.screen, "Exploration", 
+            const.INFOS_SIZE,
+            const.PROGRESS_BAR_EXPLO_FOREGROUND,
+            (x_explo + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),
+             anchor="center", rotation=90
+        )
+        
+        # exploitation
+        progress_bar(
+            self.screen, x_exploit, y, w_bg, h_bg, w_fg, h_fg_exploit,
+            const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_EXPLOIT_FOREGROUND,
+        )
+        message(
+            self.screen, "Exploitation", 
+            const.INFOS_SIZE,
+            const.PROGRESS_BAR_EXPLOIT_FOREGROUND,
+            (x_exploit + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),
+            anchor="center", rotation=90
         )
 
 

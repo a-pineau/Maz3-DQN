@@ -36,27 +36,75 @@ def plot(mean_scores, sum_rewards, file_name):
     # plt.show()
 
 
-def message(screen, msg, font_size, color, position) -> None:
+def message(
+    screen, msg, font_size, color, position, anchor="topleft", rotation=0
+) -> None:
     """
     Displays a message on screen.
 
-    Parameters
-    ----------
-    msg: string (required)
-        Actual text to be displayed
-    font_size: int (required)
-        Font size
-    color: tuple of int (required)
-        Text RGB color code
-    position: tuple of int (required)
-        Position on screen
+    Args:
+        msg (string, required): text to be displayed
+        font_size (int, required): font size
+        color (tuple, required): text RGB color code
+        position (tuple, required): text position on screen
+        anchor (string, optional, default="topleft"): anchor position on screen
+        rotation (float, optional, default=0): text rotation    
+
+    Returns:
+        None
+        
+    Raises:
+        AttributeError: exception raised when anchor is invalid
     """
     font = pg.font.SysFont("Calibri", font_size)
     text = font.render(msg, True, color)
-    text_rect = text.get_rect(topleft=(position))
+    text = pg.transform.rotate(text, rotation)
+    
+    if anchor == "topleft":
+        text_rect = text.get_rect(topleft=(position))
+    elif anchor == "center":
+        text_rect = text.get_rect(center=(position))
+    else:
+        raise AttributeError("Invalid anchor!")
+        
     screen.blit(text, text_rect)
 
 
+def progress_bar(screen, x, y, w_bg, h_bg, w_fg, h_fg, bg_color, fg_color) -> None:
+    """"
+    Draws a progress bar on screen.
+    
+    Args:
+        x (int, required): bars x coordinate
+        y (int, required): bars y coordinate
+        w_bg (float, required): background bar width
+        h_bg (float, required): background bar height
+        w_fg (float, required): foreground bar width
+        h_fg (float, required): foreground bar height
+        bg_color (tuple, required): background RGB color code
+        fg_color (tuple, required): foreground RGB color code
+        
+    Returns:
+        None
+        
+    Raises:
+        None
+    """
+    pg.draw.rect(screen, bg_color, (x, y, w_bg, h_bg))
+    pg.draw.rect(screen, fg_color, (x, y, w_fg, h_fg), width=3)
+
+
 def distance(p1, p2) -> float:
-    """Returns the distance between two points p1, p2."""
+    """Returns the distance between two points p1, p2.
+    
+    Agrs:
+        p1 (tuple, required): coordinates of point p1
+        p2 (tuple, required): coordinates of point p2
+        
+    Returns:
+        resulting distance
+        
+    Raises:
+        None
+    """
     return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
