@@ -38,9 +38,23 @@ CELL_COLORS = {
 
 
 class Game:
-    def __init__(self, human=False, grid=False, infos=True, progress_bars=True) -> None:
+    def __init__(self, grid=False, infos=True, progress_bars=True) -> None:
+        """
+        Main constructor of the Game class.
+        
+        Args:
+            grid (bool, optional, default=True): shows a grid if True, hides it otherwise
+            infos (bool, optional, default=True): shows game informations on the left part of the screen
+            progress_bars (bool, optional, default=True): shows progress bars for the reward threshold
+            the exploration and exploitations rates
+            
+        Returns:
+            None
+            
+        Raises:
+            None
+        """
         pg.init()
-        self.human = human
         self.grid = grid
         self.infos = infos
         self.progress_bars = progress_bars
@@ -68,6 +82,19 @@ class Game:
         return self.get_state()
 
     def place_player(self, r, c) -> None:
+        """Places the player at coordinates r, c.
+        
+        Args:
+            r (int, required): row index
+            c (int, required): column index
+            
+        Returns:
+            None
+            
+        Raises:
+            ValueError: if chosen location isn't a free cell
+        """
+        
         if self.maze[r, c] != 1:
             raise ValueError(f"Cannot place player at {r}, {c}!")
         else:
@@ -137,7 +164,7 @@ class Game:
 
     def step(self, action) -> tuple:
         """
-        Performs a step. First get the user's events, then move the player, get the reward
+        Performs a step. First gets the user's events, then move the player, gets the reward
         and returns the corresponding state, reward, and terminal 
         
         Args:
@@ -153,10 +180,10 @@ class Game:
         self.events()
         self.move(action)
 
-        reward, done = self.get_reward()
+        reward, terminal = self.get_reward()
         self.reward_episode += reward
 
-        return self.get_state(), reward, done
+        return self.get_state(), reward, terminal
 
     def get_state(self) -> np.ndarray:
         """Returns the current state of the game, i.e. player's current position."""
