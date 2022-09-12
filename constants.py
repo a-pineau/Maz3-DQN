@@ -8,7 +8,6 @@ vec = pg.math.Vector2
 N = 12
 M = 12
 P0 = (0, 0)
-# P1 = (N-1, M-1)
 P1 = (4, 0)
 maze = random_maze_generator(N, M, P0, P1)
 
@@ -24,7 +23,7 @@ PLAY_WIDTH = CONFIGURATION.shape[1] * BLOCK_SIZE
 PLAY_HEIGHT = INFOS_HEIGHT
 TOTAL_WIDTH = INFOS_WIDTH + PLAY_WIDTH
 TOTAL_HEIGHT = INFO_HEIGHT = PLAY_HEIGHT
-FPS = 40
+FPS = 60
 
 
 # Directories

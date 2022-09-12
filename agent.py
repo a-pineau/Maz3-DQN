@@ -41,7 +41,7 @@ class Agent:
         batch_size,
         n_actions,
         min_epsilon=0.01,
-        epsilon_decay=1e-4,
+        epsilon_decay=1e-5,
         max_mem_size=100_000,
     ) -> None:
         
@@ -93,6 +93,7 @@ class Agent:
             self.current_decision = "exploitation"
             state = T.tensor([observation]).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
+            print(actions)
             action = T.argmax(actions).item()
         else:
             self.n_exploration += 1

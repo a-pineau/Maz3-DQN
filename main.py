@@ -25,7 +25,7 @@ if __name__ == "__main__":
                 break
                         
             action = agent.choose_action(state)
-            new_state, reward, done, info = env.step(action)
+            new_state, reward, done = env.step(action)
             agent.store_transitions(state, action, reward, new_state, done)
             agent.learn()
             state = new_state

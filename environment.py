@@ -2,6 +2,7 @@
 
 import os
 import random
+from signal import valid_signals
 import numpy as np
 import pygame as pg
 import constants as const
@@ -62,29 +63,46 @@ class Game:
         """Resets the game and return its corresponding state."""
         self.reward_episode = 0
         self.maze = const.CONFIGURATION.copy()
-        self.place_player()
+        self.place_player(0, 0)
 
         return self.get_state()
 
-    def place_player(self) -> None:
-        while True:
-            i = np.random.randint(self.maze.shape[0])
-            j = np.random.randint(self.maze.shape[1])
+    def place_player(self, r, c) -> None:
+        if self.maze[r, c] != 1:
+            raise ValueError(f"Cannot place player at {r}, {c}!")
+        else:
+            self.maze[r, c] = 3
+            self.position = (r, c)
 
-            if self.maze[i, j] != 1:
+    def place_player_randomly(self) -> None:
+        """Places player randomly on board where a free cell is available."""
+        while True:
+            r = np.random.randint(self.maze.shape[0])
+            c = np.random.randint(self.maze.shape[1])
+
+            if self.maze[r, c] != 1:
                 continue
 
-            self.maze[i, j] = 3
-            self.position = (i, j)
+            self.maze[r, c] = 3
+            self.position = (r, c)
             break
 
     def move(self, action) -> None:
         """
-        Moves player according to the action chosen by the model.
+        Moves player according to the action chosen by the model. 
+        The player can only be moved into free cells.
+        The original location is then marked as visited.
 
-        args:
+        Args:
             action (int, required): action chosen by the human/agent to move the player
+            
+        Returns:
+            None
+            
+        Raises:
+            None
         """
+        
         self.exit = self.visited = self.out = self.occupied = False
         i, j = self.position
         old_position = i, j
@@ -117,14 +135,28 @@ class Game:
             self.position = i, j
             self.exit = True
 
-    def step(self, action):
+    def step(self, action) -> tuple:
+        """
+        Performs a step. First get the user's events, then move the player, get the reward
+        and returns the corresponding state, reward, and terminal 
+        
+        Args:
+            action (int, required): action taken
+            
+        Returns:
+            tuple: new state (np.ndarray), reward (int) and terminal (bool)
+            
+        Raises:
+            None
+        """
+        
         self.events()
         self.move(action)
 
         reward, done = self.get_reward()
         self.reward_episode += reward
 
-        return self.get_state(), reward, done, False
+        return self.get_state(), reward, done
 
     def get_state(self) -> np.ndarray:
         """Returns the current state of the game, i.e. player's current position."""
@@ -136,7 +168,7 @@ class Game:
         return np.array(state, dtype=np.float32)
 
     def get_reward(self) -> tuple:
-
+        """Returns the reward corresponding to a (action, state) pair and the associated terminal."""
         # stops episode if the player does nothing but wonder around
         if self.reward_episode < THRESHOLD_REWARD:
             return PENALTY_WANDER, True
@@ -156,7 +188,8 @@ class Game:
         # player moves to a free cell
         return REWARD_FREE, False
 
-    def get_values_neighbours(self):
+    def get_values_neighbours(self) -> list:
+        """Returns the values of the player neighbourhood. An out-of-bound value is tagged as -1."""
         offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         values_neighbours = []
 
@@ -170,7 +203,8 @@ class Game:
 
         return values_neighbours
 
-    def events(self):
+    def events(self) -> None:
+        """Handles the user's events. Used only to terminate the game."""
         for event in pg.event.get():
             if (
                 event.type == pg.QUIT
@@ -178,21 +212,45 @@ class Game:
                 and event.key == pg.K_q
             ):
                 self.running = False
-                
-    def get_data_ratios(self, agent):
-        r_exploration = (
-            agent.n_exploration / (agent.n_exploration + agent.n_exploitation)
+
+    def get_data_ratios(self, agent) -> tuple:
+        """
+        Get the exploration, exploitation and reward threshold percentage.
+        
+        Args:
+            agent (Agent, required): the training agent
+            
+        Returns:
+            tuple: the 3 percentages
+            
+        Raises:
+            None
+        """
+        
+        r_exploration = agent.n_exploration / (
+            agent.n_exploration + agent.n_exploitation
         )
-        r_exploitation = (
-            agent.n_exploitation / (agent.n_exploration + agent.n_exploitation)
+        r_exploitation = agent.n_exploitation / (
+            agent.n_exploration + agent.n_exploitation
         )
         r_threshold = self.reward_episode / THRESHOLD_REWARD
-        
+
         return r_exploration, r_exploitation, r_threshold
 
-    def render(self, agent):
-        """TODO"""
-
+    def render(self, agent) -> None:
+        """
+        Renders the game. The grid, the progress bars and the informations can be disabled (see Game constructor).
+        
+        Args:
+            agent (DeepQNetwork, required): trained agent
+            
+        Returns:
+            None
+            
+        Raises:
+            None
+        """
+        
         self.screen.fill(const.BACKGROUND_COLOR)
         data_ratios = self.get_data_ratios(agent)
 
@@ -259,8 +317,10 @@ class Game:
         # Drawing infos
         for i, info in enumerate(infos):
             message(
-                self.screen, info, 
-                const.INFOS_SIZE, const.INFOS_COLOR, 
+                self.screen,
+                info,
+                const.INFOS_SIZE,
+                const.INFOS_COLOR,
                 (5, 5 + i * const.Y_OFFSET_INFOS),
             )
 
@@ -281,33 +341,33 @@ class Game:
             const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_THRESH_FOREGROUND,
         )
         message(
-            self.screen, "Reward threshold", 
+            self.screen, "Reward threshold",
             const.INFOS_SIZE,
             const.PROGRESS_BAR_THRESH_FOREGROUND,
             (x_thresh + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),
              anchor="center", rotation=90
         )
-        
+
         # exploration
         progress_bar(
             self.screen, x_explo, y, w_bg, h_bg, w_fg, h_fg_explo,
             const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_EXPLO_FOREGROUND,
         )
         message(
-            self.screen, "Exploration", 
+            self.screen, "Exploration",
             const.INFOS_SIZE,
             const.PROGRESS_BAR_EXPLO_FOREGROUND,
             (x_explo + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),
              anchor="center", rotation=90
         )
-        
+
         # exploitation
         progress_bar(
             self.screen, x_exploit, y, w_bg, h_bg, w_fg, h_fg_exploit,
             const.PROGRESS_BAR_BACKGROUND, const.PROGRESS_BAR_EXPLOIT_FOREGROUND,
         )
         message(
-            self.screen, "Exploitation", 
+            self.screen, "Exploitation",
             const.INFOS_SIZE,
             const.PROGRESS_BAR_EXPLOIT_FOREGROUND,
             (x_exploit + const.PROGRESS_BAR_WIDTH // 2 + 1, h_bg // 2),

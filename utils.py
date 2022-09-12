@@ -91,7 +91,7 @@ def progress_bar(screen, x, y, w_bg, h_bg, w_fg, h_fg, bg_color, fg_color) -> No
         None
     """
     pg.draw.rect(screen, bg_color, (x, y, w_bg, h_bg))
-    pg.draw.rect(screen, fg_color, (x, y, w_fg, h_fg), width=3)
+    pg.draw.rect(screen, fg_color, (x, y, w_fg, h_fg), width=2)
 
 
 def distance(p1, p2) -> float:
